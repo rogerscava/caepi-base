@@ -1,0 +1,41 @@
+name: Atualizar base CAEPI
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar este repositorio
+        uses: actions/checkout@v4
+
+      - name: Baixar base CAEPI do Ministerio do Trabalho (FTP)
+        run: |
+          set -e
+          URL="ftp://ftp.mtps.gov.br/portal/fiscalizacao/seguranca-e-saude-no-trabalho/caepi/tgg_export_caepi.zip"
+          echo "Baixando $URL ..."
+          curl -fsS --retry 3 --retry-delay 10 --connect-timeout 90 --max-time 600 "$URL" -o tgg_export_caepi.zip
+          ls -lh tgg_export_caepi.zip
+          if [ "$(stat -c%s tgg_export_caepi.zip)" -lt 1000000 ]; then
+            echo "Arquivo muito pequeno, possivel erro no download." >&2
+            exit 1
+          fi
+
+      - name: Publicar se mudou
+        run: |
+          git config user.name "caepi-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add tgg_export_caepi.zip
+          if git diff --staged --quiet; then
+            echo "Base sem alteracoes hoje. Nada a publicar."
+          else
+            git commit -m "Atualiza base CAEPI ($(date +%F))"
+            git push
+            echo "Base CAEPI atualizada e publicada."
+          fi
